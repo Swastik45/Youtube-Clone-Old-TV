@@ -2,81 +2,115 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Watch — YouTV</title>
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>YouTV</title>
 
 <style>
+
 body{
-    margin:0;
-    overflow:hidden;
-    background:#000;
+margin:0;
+background:#000;
+overflow:hidden;
+font-family:sans-serif;
 }
 
 #player-wrap{
-    position:fixed;
-    inset:0;
-    bottom:72px;
-    background:#000;
+position:fixed;
+inset:0;
+bottom:72px;
+background:#000;
 }
 
 #player{
-    width:100%;
-    height:100%;
+width:100%;
+height:100%;
 }
 
-#controls-bar{
-    position:fixed;
-    bottom:0;
-    left:0;
-    right:0;
-    height:72px;
-    background:#111;
-    border-top:1px solid #222;
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:0 16px;
-}
-
-#video-title{
-    flex:1;
-    color:#aaa;
-    overflow:hidden;
-    white-space:nowrap;
-    text-overflow:ellipsis;
+#controls{
+position:fixed;
+bottom:0;
+left:0;
+right:0;
+height:72px;
+display:flex;
+gap:10px;
+align-items:center;
+padding:0 15px;
+background:#111;
+border-top:1px solid #222;
 }
 
 button{
-    padding:10px 14px;
-    border:none;
-    cursor:pointer;
-    background:#222;
-    color:white;
-    border-radius:8px;
+padding:10px;
+border:none;
+background:#222;
+color:white;
+cursor:pointer;
+border-radius:8px;
 }
 
 button:hover{
-    background:#333;
+background:#333;
 }
+
+#title{
+flex:1;
+overflow:hidden;
+white-space:nowrap;
+text-overflow:ellipsis;
+color:#aaa;
+}
+
 </style>
 </head>
 
 <body>
 
 <div id="player-wrap">
-    <!-- Container only -->
-    <div id="player"></div>
+<div id="player"></div>
 </div>
 
-<div id="controls-bar">
-    <span id="video-title"></span>
+<div id="controls">
 
-    <button onclick="goBack()">← BACK</button>
-    <button onclick="reloadVideo()">⟳ RELOAD</button>
-    <button onclick="tryFullscreen()">⛶ FULLSCREEN</button>
+<span id="title"></span>
+
+<button onclick="togglePlay()">⏯</button>
+
+<button onclick="seek(-10)">
+-10s
+</button>
+
+<button onclick="seek(10)">
++10s
+</button>
+
+<button onclick="reloadVideo()">
+⟳
+</button>
+
+<button onclick="toggleMute()">
+🔇
+</button>
+
+<button onclick="toggleLoop()">
+🔁
+</button>
+
+<button onclick="fullscreen()">
+⛶
+</button>
+
+<button onclick="goBack()">
+←
+</button>
+
 </div>
+
 
 <script>
+
 let videoId =
 localStorage.getItem("videoId") || "";
 
@@ -84,15 +118,18 @@ let videoTitle =
 localStorage.getItem("videoTitle") || "";
 
 let backTo =
-localStorage.getItem("playerBackTo") || "search";
+localStorage.getItem(
+"playerBackTo"
+) || "search";
 
 document.getElementById(
-"video-title"
-).textContent = videoTitle;
+"title"
+).textContent =
+videoTitle;
 
 let player;
+let loop=false;
 
-// Load YouTube API
 let tag =
 document.createElement("script");
 
@@ -102,97 +139,296 @@ tag.src =
 document.head.appendChild(tag);
 
 
+
 function onYouTubeIframeAPIReady(){
 
-    if(!videoId){
-        document.getElementById(
-        "player-wrap"
-        ).innerHTML =
-        "<h2 style='color:white;text-align:center;padding-top:40vh'>No video selected</h2>";
+if(!videoId){
 
-        return;
-    }
+document.body.innerHTML=
+"<h2 style='color:white;text-align:center;padding-top:40vh'>No video</h2>";
 
-    player =
-    new YT.Player("player",{
+return;
 
-        videoId:videoId,
-
-        playerVars:{
-            autoplay:1,
-            controls:1,      // show controls
-            modestbranding:1,
-            rel:0,
-            playsinline:1,
-            fs:1             // allow fullscreen
-        },
-
-        events:{
-            onReady:e=>{
-                e.target.playVideo();
-            }
-        }
-    });
 }
+
+
+player =
+new YT.Player(
+"player",{
+
+videoId,
+
+playerVars:{
+
+autoplay:1,
+mute:0,
+controls:1,
+playsinline:1,
+rel:0,
+modestbranding:1,
+iv_load_policy:3,
+fs:1,
+enablejsapi:1,
+origin:location.origin,
+disablekb:0,
+cc_load_policy:0
+
+},
+
+events:{
+
+onReady:onReady,
+
+onStateChange:onStateChange
+
+}
+
+});
+
+}
+
+
+
+function onReady(e){
+
+let saved=
+localStorage.getItem(
+"watch_"+videoId
+);
+
+if(saved){
+
+e.target.seekTo(
+parseFloat(saved),
+true
+);
+
+}
+
+
+attemptAutoplay();
+
+}
+
+
+
+function attemptAutoplay(){
+
+player.playVideo();
+
+setTimeout(()=>{
+
+let state=
+player.getPlayerState();
+
+if(
+state!==1
+){
+
+player.mute();
+
+player.playVideo();
+
+}
+
+},500);
+
+}
+
+
+
+function onStateChange(e){
+
+if(
+e.data===YT.PlayerState.ENDED &&
+loop
+){
+
+player.playVideo();
+
+}
+
+}
+
+
+
+setInterval(()=>{
+
+if(
+player &&
+player.getCurrentTime
+){
+
+localStorage.setItem(
+
+"watch_"+videoId,
+
+player.getCurrentTime()
+
+);
+
+}
+
+},5000);
+
+
+
+function togglePlay(){
+
+let s=
+player.getPlayerState();
+
+if(
+s===1
+)
+player.pauseVideo();
+
+else
+player.playVideo();
+
+}
+
 
 
 function reloadVideo(){
 
-    if(player)
-        player.loadVideoById(videoId);
+player.loadVideoById(
+videoId
+);
 
 }
+
+
+
+function seek(sec){
+
+let t=
+player.getCurrentTime();
+
+player.seekTo(
+t+sec,
+true
+);
+
+}
+
+
+
+function toggleMute(){
+
+if(
+player.isMuted()
+)
+
+player.unMute();
+
+else
+
+player.mute();
+
+}
+
+
+
+function toggleLoop(){
+
+loop=!loop;
+
+alert(
+"Loop "+
+(loop?"ON":"OFF")
+);
+
+}
+
+
+
+function fullscreen(){
+
+let iframe=
+document.querySelector(
+"#player iframe"
+);
+
+if(
+iframe.requestFullscreen
+)
+
+iframe.requestFullscreen();
+
+}
+
 
 
 function goBack(){
 
-    if(player)
-        player.destroy();
+if(player)
+player.destroy();
 
-    location.href =
-    backTo==="playlist"
-    ? "playlists.html"
-    : backTo==="channel"
-    ? "channel.html"
-    : "search.html";
-
-}
-
-
-function tryFullscreen(){
-
-    let iframe =
-    document.querySelector(
-    "#player iframe"
-    );
-
-    if(
-        iframe &&
-        iframe.requestFullscreen
-    ){
-
-        iframe.requestFullscreen();
-
-    }
+location.href=
+backTo==="playlist"
+? "playlists.html"
+: backTo==="channel"
+? "channel.html"
+: "search.html";
 
 }
+
 
 
 document.addEventListener(
 "keydown",
 e=>{
 
-    if(
-        e.key==="Escape" ||
-        e.key==="Backspace"
-    ){
+switch(e.key){
 
-        e.preventDefault();
-        goBack();
+case " ":
+e.preventDefault();
+togglePlay();
+break;
 
-    }
+case "ArrowRight":
+seek(10);
+break;
+
+case "ArrowLeft":
+seek(-10);
+break;
+
+case "f":
+fullscreen();
+break;
+
+case "m":
+toggleMute();
+break;
+
+case "Escape":
+goBack();
+break;
+
+}
 
 });
+
+
+
+document.addEventListener(
+"visibilitychange",
+
+()=>{
+
+if(
+!document.hidden &&
+player
+){
+
+attemptAutoplay();
+
+}
+
+});
+
 </script>
 
 </body>
