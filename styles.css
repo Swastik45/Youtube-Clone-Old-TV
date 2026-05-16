@@ -1,0 +1,283 @@
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --red: #FF0000;
+  --red-dark: #cc0000;
+  --bg: #0a0a0a;
+  --bg2: #141414;
+  --bg3: #1e1e1e;
+  --border: #2a2a2a;
+  --text: #f0f0f0;
+  --muted: #888;
+  --faint: #444;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-size: 16px;
+  overflow-x: hidden;
+}
+
+/* ===== LOGO ===== */
+.logo {
+  font-family: 'Bebas Neue', Arial, sans-serif;
+  font-size: 28px;
+  letter-spacing: 2px;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+.logo span { color: var(--red); }
+
+/* ===== TOP BAR ===== */
+.top-bar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.top-bar-spacer { flex: 1; }
+
+.top-bar input[type="text"] {
+  padding: 8px 14px;
+  font-size: 15px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  width: 260px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.top-bar input[type="text"]:focus {
+  border-color: var(--red);
+  outline: none;
+}
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-block;
+  padding: 9px 20px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.18s, transform 0.1s;
+  letter-spacing: 0.5px;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-red { background: var(--red); color: #fff; }
+.btn-red:hover { background: var(--red-dark); }
+.btn-red:focus { outline: 2px solid #fff; outline-offset: 2px; }
+
+.btn-ghost {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: var(--faint); }
+.btn-ghost:focus { outline: 2px solid var(--red); }
+
+/* ===== TAB BAR ===== */
+.tab-bar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 20px;
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  padding: 7px 18px;
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--muted);
+  transition: all 0.18s;
+  letter-spacing: 0.5px;
+}
+.tab-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+.tab-btn:hover:not(.active) { color: var(--text); border-color: var(--faint); }
+.tab-btn:focus { outline: 2px solid var(--red); }
+
+/* ===== CARD GRID ===== */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 20px;
+}
+
+@media (max-width: 1100px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 750px)  { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .card-grid { grid-template-columns: 1fr; } }
+
+/* ===== CARD ===== */
+.card {
+  background: var(--bg2);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.card:hover, .card:focus {
+  border-color: var(--red);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(255, 0, 0, 0.15);
+  outline: none;
+}
+
+.card-thumb {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+  background: #111;
+}
+
+.card-body { padding: 12px; }
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  height: 38px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+.card-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-top: 6px;
+  letter-spacing: 1px;
+}
+
+/* ===== SCROLLABLE CONTENT AREA ===== */
+.content-area {
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.content-area-tabs {
+  height: calc(100vh - 108px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== LOADING ===== */
+#loading {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+}
+#loading.on { display: flex; }
+#loading p { color: #fff; font-size: 18px; font-weight: 500; }
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #333;
+  border-top-color: var(--red);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== TOAST ===== */
+#toast {
+  display: none;
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  z-index: 9999;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+#toast.on { display: block; }
+
+/* ===== BACK LINK ===== */
+.back-link {
+  font-family: 'Bebas Neue', Arial, sans-serif;
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 10px 4px 0;
+  border: none;
+  background: none;
+  transition: color 0.18s;
+}
+.back-link:hover { color: var(--text); }
+.back-link:focus { outline: 2px solid var(--red); border-radius: 3px; }
+
+/* ===== MESSAGE ===== */
+.msg {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--faint);
+  font-size: 18px;
+}
+
+/* ===== SECTION TITLE ===== */
+.section-title {
+  font-family: 'Bebas Neue', Arial, sans-serif;
+  font-size: 18px;
+  letter-spacing: 3px;
+  color: var(--muted);
+  padding: 20px 20px 10px;
+  border-bottom: 1px solid var(--red);
+  margin-bottom: 4px;
+}

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Channel — YouTV</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .channel-banner {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    display: block;
+    background: var(--bg3);
+  }
+
+  .channel-head {
+    background: var(--bg2);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .channel-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #111;
+  }
+
+  .channel-name {
+    font-family: 'Bebas Neue', Arial, sans-serif;
+    font-size: 28px;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  .channel-stats { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><p>Loading…</p></div>
+<div id="toast"></div>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <button class="back-link" onclick="goBack()">← BACK</button>
+  <div class="top-bar-spacer"></div>
+  <span id="channel-nav-name" style="color:var(--muted);font-size:14px;"></span>
+</div>
+
+<!-- CONTENT -->
+<div class="content-area">
+  <img id="channel-banner" class="channel-banner" src="" alt="" style="display:none;">
+
+  <div class="channel-head">
+    <img id="channel-avatar" class="channel-avatar" src="" alt="">
+    <div>
+      <div class="channel-name" id="channel-name"></div>
+      <div class="channel-stats" id="channel-stats"></div>
+    </div>
+  </div>
+
+  <div class="section-title">Latest Videos</div>
+  <div id="channel-videos" class="card-grid"></div>
+
+  <div id="playlists-section" style="display:none;">
+    <div class="section-title">Playlists</div>
+    <div id="channel-playlists" class="card-grid"></div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  var channelId = loadState('channelId', '');
+
+  function goBack() { window.location.href = 'search.html'; }
+
+  if (!channelId) {
+    document.querySelector('.content-area').innerHTML = '<div class="msg">No channel selected.</div>';
+  } else {
+    loadChannel(channelId);
+  }
+
+  function loadChannel(id) {
+    showLoading();
+
+    var url = buildUrl('channels', {
+      part: 'snippet,statistics,brandingSettings',
+      id: id
+    });
+
+    apiCall(url, function(err, data) {
+      if (err || !data || !data.items || !data.items[0]) {
+        hideLoading();
+        showToast('Channel not found');
+        return;
+      }
+
+      var ch = data.items[0];
+      var snippet  = ch.snippet  || {};
+      var stats    = ch.statistics || {};
+      var branding = ch.brandingSettings || {};
+
+      gid('channel-nav-name').textContent = snippet.title || '';
+      gid('channel-name').textContent     = snippet.title || '';
+      gid('channel-stats').innerHTML =
+        fmtNum(stats.subscriberCount) + ' subscribers &bull; ' +
+        fmtNum(stats.videoCount)      + ' videos &bull; ' +
+        fmtNum(stats.viewCount)       + ' views';
+
+      var avatarUrl = '';
+      if (snippet.thumbnails) {
+        var th = snippet.thumbnails;
+        avatarUrl = ((th.high || th.medium || th.default) || {}).url || '';
+      }
+      gid('channel-avatar').src = avatarUrl;
+
+      var bannerUrl = branding.image ? branding.image.bannerExternalUrl || '' : '';
+      if (bannerUrl) {
+        gid('channel-banner').src = bannerUrl;
+        gid('channel-banner').style.display = 'block';
+      }
+
+      // Videos
+      apiCall(buildUrl('search', {
+        part: 'snippet',
+        channelId: id,
+        maxResults: 40,
+        order: 'date',
+        type: 'video'
+      }), function(e2, vidData) {
+        if (!e2 && vidData && vidData.items) {
+          renderCards(vidData.items, 'video', 'channel-videos', 'channel');
+        }
+
+        // Playlists
+        apiCall(buildUrl('playlists', {
+          part: 'snippet,contentDetails',
+          channelId: id,
+          maxResults: 20
+        }), function(e3, plData) {
+          hideLoading();
+          if (!e3 && plData && plData.items && plData.items.length) {
+            gid('playlists-section').style.display = 'block';
+            renderPlaylistCards(plData.items, 'channel-playlists');
+          }
+        });
+      });
+    });
+  }
+
+  function renderCards(items, type, gridId, backTo) {
+    var grid = gid(gridId);
+    grid.innerHTML = '';
+    if (!items || !items.length) {
+      grid.innerHTML = '<div class="msg" style="padding:30px;">No items.</div>';
+      return;
+    }
+
+    items.forEach(function(item) {
+      var thumb = (item.snippet && item.snippet.thumbnails && item.snippet.thumbnails.medium)
+        ? item.snippet.thumbnails.medium.url : '';
+      var title = (item.snippet && item.snippet.title) || 'Untitled';
+      var dateStr = '';
+      if (item.snippet && item.snippet.publishedAt) {
+        var d = new Date(item.snippet.publishedAt);
+        dateStr = d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+      }
+
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.setAttribute('tabindex', '0');
+      card.innerHTML =
+        '<img class="card-thumb" src="' + escHtml(thumb) + '" onerror="this.src=\'\'" alt="">' +
+        '<div class="card-body">' +
+        '<div class="card-title">' + escHtml(title) + '</div>' +
+        '<div class="card-meta">' + (dateStr || '') + '</div>' +
+        '</div>';
+
+      var vid = item.id && item.id.videoId;
+      if (vid) {
+        card.onclick = function() {
+          saveState('videoId', vid);
+          saveState('videoTitle', title);
+          saveState('playerBackTo', backTo || 'search');
+          window.location.href = 'video.html';
+        };
+      }
+      card.addEventListener('keydown', function(e) {
+        if (e.keyCode === 13 || e.keyCode === 32) { e.preventDefault(); card.click(); }
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function renderPlaylistCards(items, gridId) {
+    var grid = gid(gridId);
+    items.forEach(function(pl) {
+      var plThumb = (pl.snippet && pl.snippet.thumbnails && pl.snippet.thumbnails.medium)
+        ? pl.snippet.thumbnails.medium.url : '';
+      var plTitle = (pl.snippet && pl.snippet.title) || '';
+      var count   = (pl.contentDetails && pl.contentDetails.itemCount) || 0;
+
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.setAttribute('tabindex', '0');
+      card.innerHTML =
+        '<img class="card-thumb" src="' + escHtml(plThumb) + '" onerror="this.src=\'\'" alt="">' +
+        '<div class="card-body">' +
+        '<div class="card-title">' + escHtml(plTitle) + '</div>' +
+        '<div class="card-meta">' + count + ' videos</div>' +
+        '<span class="badge">PLAYLIST</span>' +
+        '</div>';
+      card.onclick = function() {
+        saveState('playlistId', pl.id);
+        saveState('playlistTitle', plTitle);
+        saveState('playlistThumb', plThumb);
+        window.location.href = 'playlists.html';
+      };
+      card.addEventListener('keydown', function(e) {
+        if (e.keyCode === 13 || e.keyCode === 32) { e.preventDefault(); card.click(); }
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.keyCode === 8 || e.keyCode === 27) { e.preventDefault(); goBack(); }
+  });
+</script>
+</body>
+</html>

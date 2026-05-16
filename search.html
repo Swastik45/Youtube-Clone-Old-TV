@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Results — YouTV</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><p>Loading…</p></div>
+<div id="toast"></div>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <a class="logo" href="index.html">You<span>TV</span></a>
+  <div class="top-bar-spacer"></div>
+  <input id="results-search-input" type="text" placeholder="Search…" autocomplete="off">
+  <button class="btn btn-red" onclick="reSearch()">GO</button>
+</div>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab-btn" id="tab-video"    onclick="switchTab('video')">Videos</button>
+  <button class="tab-btn" id="tab-channel"  onclick="switchTab('channel')">Channels</button>
+  <button class="tab-btn" id="tab-playlist" onclick="switchTab('playlist')">Playlists</button>
+</div>
+
+<!-- RESULTS -->
+<div class="content-area-tabs">
+  <div id="results-grid" class="card-grid"></div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  var currentQuery = loadState('query', '');
+  var currentType  = loadState('type', 'video');
+
+  // Init UI
+  gid('results-search-input').value = currentQuery;
+  setActiveTab(currentType);
+
+  if (currentQuery) {
+    doSearch(currentQuery, currentType);
+  } else {
+    gid('results-grid').innerHTML = '<div class="msg">No search query. <a href="index.html" style="color:var(--red)">Go back</a></div>';
+  }
+
+  function setActiveTab(t) {
+    ['video','channel','playlist'].forEach(function(k) {
+      var el = gid('tab-' + k);
+      if (el) el.className = 'tab-btn' + (k === t ? ' active' : '');
+    });
+  }
+
+  function switchTab(t) {
+    currentType = t;
+    saveState('type', t);
+    setActiveTab(t);
+    doSearch(currentQuery, t);
+  }
+
+  function reSearch() {
+    var q = gid('results-search-input').value.trim();
+    if (!q) return;
+    currentQuery = q;
+    saveState('query', q);
+    doSearch(q, currentType);
+  }
+
+  function doSearch(q, type) {
+    showLoading();
+    gid('results-grid').innerHTML = '';
+
+    var url = buildUrl('search', {
+      part: 'snippet',
+      q: q,
+      type: type,
+      maxResults: 40,
+      order: 'relevance'
+    });
+
+    apiCall(url, function(err, data) {
+      hideLoading();
+      if (err || !data || !data.items) {
+        gid('results-grid').innerHTML = '<div class="msg">Failed to load results.</div>';
+        return;
+      }
+      renderCards(data.items, type, 'results-grid');
+    });
+  }
+
+  function renderCards(items, type, gridId) {
+    var grid = gid(gridId);
+    grid.innerHTML = '';
+    if (!items || !items.length) {
+      grid.innerHTML = '<div class="msg">No results found.</div>';
+      return;
+    }
+
+    items.forEach(function(item) {
+      var thumb = (item.snippet && item.snippet.thumbnails && item.snippet.thumbnails.medium)
+        ? item.snippet.thumbnails.medium.url : '';
+      var title = (item.snippet && item.snippet.title) || 'Untitled';
+      var channelTitle = (item.snippet && item.snippet.channelTitle) || '';
+      var dateStr = '';
+      if (item.snippet && item.snippet.publishedAt) {
+        var d = new Date(item.snippet.publishedAt);
+        dateStr = d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+      }
+
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.setAttribute('tabindex', '0');
+
+      var html = '<img class="card-thumb" src="' + escHtml(thumb) + '" onerror="this.src=\'\'" alt="">';
+      html += '<div class="card-body">';
+      html += '<div class="card-title">' + escHtml(title) + '</div>';
+
+      if (type === 'video') {
+        var vid = item.id && item.id.videoId;
+        html += '<div class="card-meta">' + escHtml(channelTitle) + (dateStr ? ' &bull; ' + dateStr : '') + '</div>';
+        html += '</div>';
+        card.innerHTML = html;
+        if (vid) {
+          card.onclick = function() {
+            saveState('videoId', vid);
+            saveState('videoTitle', title);
+            saveState('playerBackTo', 'search');
+            window.location.href = 'video.html';
+          };
+        }
+
+      } else if (type === 'channel') {
+        var chId = item.id && item.id.channelId;
+        var desc = (item.snippet && item.snippet.description) ? item.snippet.description.substring(0, 70) : '';
+        html += '<div class="card-meta">' + escHtml(desc) + '</div>';
+        html += '<span class="badge">CHANNEL</span>';
+        html += '</div>';
+        card.innerHTML = html;
+        if (chId) {
+          card.onclick = function() {
+            saveState('channelId', chId);
+            window.location.href = 'channel.html';
+          };
+        }
+
+      } else if (type === 'playlist') {
+        var plId = item.id && item.id.playlistId;
+        html += '<div class="card-meta">' + escHtml(channelTitle) + '</div>';
+        html += '<span class="badge">PLAYLIST</span>';
+        html += '</div>';
+        card.innerHTML = html;
+        if (plId) {
+          card.onclick = function() {
+            saveState('playlistId', plId);
+            saveState('playlistTitle', title);
+            saveState('playlistThumb', thumb);
+            window.location.href = 'playlists.html';
+          };
+        }
+      }
+
+      card.addEventListener('keydown', function(e) {
+        if (e.keyCode === 13 || e.keyCode === 32) { e.preventDefault(); card.click(); }
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  // keyboard nav
+  document.addEventListener('keydown', function(e) {
+    var key = e.keyCode;
+    if (key === 8) {
+      var active = document.activeElement;
+      if (active && active.id === 'results-search-input') return;
+      e.preventDefault();
+      window.location.href = 'index.html';
+    }
+    if ([37,38,39,40].indexOf(key) !== -1) {
+      e.preventDefault();
+      navigateGrid(key);
+    }
+    if (key === 13 && document.activeElement && document.activeElement.id === 'results-search-input') {
+      reSearch();
+    }
+  });
+
+  function navigateGrid(keyCode) {
+    var grid = gid('results-grid');
+    var cards = grid.getElementsByClassName('card');
+    if (!cards.length) return;
+    var focused = document.activeElement;
+    var idx = -1;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i] === focused) { idx = i; break; }
+    }
+    var cols = 4;
+    if (cards[0]) {
+      var cw = cards[0].offsetWidth, gw = grid.offsetWidth;
+      if (cw > 0) cols = Math.max(1, Math.round(gw / cw));
+    }
+    var next = idx;
+    if (keyCode === 39) next = idx + 1;
+    else if (keyCode === 37) next = idx - 1;
+    else if (keyCode === 40) next = idx + cols;
+    else if (keyCode === 38) next = idx - cols;
+
+    if (next >= 0 && next < cards.length) {
+      cards[next].focus();
+      cards[next].scrollIntoView({ block: 'nearest' });
+    } else if (idx === -1 && cards[0]) {
+      cards[0].focus();
+    }
+  }
+
+  gid('results-search-input').addEventListener('keydown', function(e) {
+    if (e.keyCode === 13) reSearch();
+  });
+</script>
+</body>
+</html>
