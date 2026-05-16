@@ -4,143 +4,196 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watch — YouTV</title>
-<link rel="stylesheet" href="styles.css">
+
 <style>
-  body { overflow: hidden; }
+body{
+    margin:0;
+    overflow:hidden;
+    background:#000;
+}
 
-  #player-wrap {
-    position: fixed;
-    inset: 0;
-    bottom: 72px;
-    background: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+#player-wrap{
+    position:fixed;
+    inset:0;
+    bottom:72px;
+    background:#000;
+}
 
-  /* Target the native video tag to scale perfectly across the screen */
-  #player-video {
-    width: 100%;
-    height: 100%;
-    display: block;
-    outline: none;
-  }
+#player{
+    width:100%;
+    height:100%;
+}
 
-  #controls-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 72px;
-    background: var(--bg2);
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 10px;
-  }
+#controls-bar{
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    height:72px;
+    background:#111;
+    border-top:1px solid #222;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:0 16px;
+}
 
-  #video-title {
-    flex: 1;
-    font-size: 14px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: 500;
-  }
+#video-title{
+    flex:1;
+    color:#aaa;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+}
+
+button{
+    padding:10px 14px;
+    border:none;
+    cursor:pointer;
+    background:#222;
+    color:white;
+    border-radius:8px;
+}
+
+button:hover{
+    background:#333;
+}
 </style>
 </head>
+
 <body>
 
-<div id="loading"><div class="spinner"></div><p>Loading…</p></div>
-<div id="toast"></div>
-
 <div id="player-wrap">
-  <!-- Dropped the iframe. Using a raw HTML5 video player with clean native controls -->
-  <video id="player-video">
-         Your browser does not support raw playback.
-  </video>
+    <!-- Container only -->
+    <div id="player"></div>
 </div>
 
 <div id="controls-bar">
-  <span id="video-title"></span>
-  <button class="btn btn-ghost" onclick="goBack()">← BACK</button>
-  <button class="btn btn-ghost" onclick="reloadVideo()">⟳ RELOAD</button>
-  <button class="btn btn-red"   onclick="tryFullscreen()">⛶ FULLSCREEN</button>
+    <span id="video-title"></span>
+
+    <button onclick="goBack()">← BACK</button>
+    <button onclick="reloadVideo()">⟳ RELOAD</button>
+    <button onclick="tryFullscreen()">⛶ FULLSCREEN</button>
 </div>
 
-<script src="shared.js"></script>
 <script>
-  // 1. Load the official YouTube player framework asynchronously 
-  var tag = document.createElement('script');
-  tag.src = "https://www.youtube.com/iframe_api";
-  var firstScriptTag = document.getElementsByTagName('script')[0];
-  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+let videoId =
+localStorage.getItem("videoId") || "";
 
-  var videoId    = loadState('videoId', '');
-  var videoTitle = loadState('videoTitle', '');
-  var backTo     = loadState('playerBackTo', 'search');
-  var player;
+let videoTitle =
+localStorage.getItem("videoTitle") || "";
 
-  gid('video-title').textContent = videoTitle || '';
+let backTo =
+localStorage.getItem("playerBackTo") || "search";
 
-  // 2. This function triggers automatically when the streaming framework is ready
-  function onYouTubeIframeAPIReady() {
-    if (!videoId) {
-      gid('player-wrap').innerHTML = '<div class="msg" style="padding-top:30vh;color:#555;">No video selected.</div>';
-      return;
+document.getElementById(
+"video-title"
+).textContent = videoTitle;
+
+let player;
+
+// Load YouTube API
+let tag =
+document.createElement("script");
+
+tag.src =
+"https://www.youtube.com/iframe_api";
+
+document.head.appendChild(tag);
+
+
+function onYouTubeIframeAPIReady(){
+
+    if(!videoId){
+        document.getElementById(
+        "player-wrap"
+        ).innerHTML =
+        "<h2 style='color:white;text-align:center;padding-top:40vh'>No video selected</h2>";
+
+        return;
     }
-    
-    player = new YT.Player('player-video', {
-      height: '100%',
-      width: '100%',
-      videoId: videoId,
-      playerVars: {
-        'autoplay': 1,
-        'controls': 0,          // Strips out all YouTube play bars/timelines completely
-        'disablekb': 1,         // Disables default YouTube shortcut overrides
-        'modestbranding': 1,    // Completely removes the large YouTube watermark profile
-        'rel': 0,               // Blocks automated recommendations when video ends
-        'iv_load_policy': 3,    // Strips annotations out of the stream view context
-        'playsinline': 1
-      },
-      events: {
-        'onReady': onPlayerReady
-      }
+
+    player =
+    new YT.Player("player",{
+
+        videoId:videoId,
+
+        playerVars:{
+            autoplay:1,
+            controls:1,      // show controls
+            modestbranding:1,
+            rel:0,
+            playsinline:1,
+            fs:1             // allow fullscreen
+        },
+
+        events:{
+            onReady:e=>{
+                e.target.playVideo();
+            }
+        }
     });
-  }
+}
 
-  function onPlayerReady(event) {
-    event.target.playVideo();
-  }
 
-  function goBack() {
-    if (player && player.destroy) player.destroy(); // Tear down streaming instances cleanly
-    var dest = backTo === 'playlist' ? 'playlists.html'
-             : backTo === 'channel'  ? 'channel.html'
-             : 'search.html';
-    window.location.href = dest;
-  }
+function reloadVideo(){
 
-  function reloadVideo() {
-    if (!player || !videoId) return;
-    player.loadVideoById(videoId);
-    showToast('Reloading core stream canvas…');
-  }
+    if(player)
+        player.loadVideoById(videoId);
 
-  function tryFullscreen() {
-    // Target the iframe wrapper element injected by the API engine
-    var el = document.getElementById('player-video');
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullScreen) el.webkitRequestFullScreen();
-    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
-    else showToast('Fullscreen not supported on this device');
-  }
+}
 
-  document.addEventListener('keydown', function(e) {
-    if (e.keyCode === 8 || e.keyCode === 27) { e.preventDefault(); goBack(); }
-  });
+
+function goBack(){
+
+    if(player)
+        player.destroy();
+
+    location.href =
+    backTo==="playlist"
+    ? "playlists.html"
+    : backTo==="channel"
+    ? "channel.html"
+    : "search.html";
+
+}
+
+
+function tryFullscreen(){
+
+    let iframe =
+    document.querySelector(
+    "#player iframe"
+    );
+
+    if(
+        iframe &&
+        iframe.requestFullscreen
+    ){
+
+        iframe.requestFullscreen();
+
+    }
+
+}
+
+
+document.addEventListener(
+"keydown",
+e=>{
+
+    if(
+        e.key==="Escape" ||
+        e.key==="Backspace"
+    ){
+
+        e.preventDefault();
+        goBack();
+
+    }
+
+});
 </script>
+
 </body>
 </html>

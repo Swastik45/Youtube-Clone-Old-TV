@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playlist — YouTV</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .playlist-head {
+    background: var(--bg2);
+    padding: 16px 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .playlist-head img {
+    width: 130px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    object-fit: cover;
+    background: #111;
+  }
+
+  .playlist-head h2 {
+    font-family: 'Bebas Neue', Arial, sans-serif;
+    font-size: 24px;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  .playlist-head p { font-size: 13px; color: var(--muted); }
+
+  .pl-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .pl-item:hover, .pl-item:focus {
+    background: var(--bg3);
+    border-left: 3px solid var(--red);
+    outline: none;
+  }
+
+  .pl-num {
+    width: 28px;
+    text-align: right;
+    color: var(--faint);
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .pl-thumb {
+    width: 110px;
+    height: 62px;
+    object-fit: cover;
+    border-radius: 5px;
+    flex-shrink: 0;
+    background: #111;
+  }
+
+  .pl-info { flex: 1; min-width: 0; }
+  .pl-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl-ch { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><p>Loading…</p></div>
+<div id="toast"></div>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <button class="back-link" onclick="goBack()">← BACK</button>
+  <div class="top-bar-spacer"></div>
+  <button class="btn btn-red" onclick="playAll()">▶ PLAY ALL</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content-area">
+  <div id="playlist-head" class="playlist-head"></div>
+  <div id="playlist-items"></div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  var playlistId    = loadState('playlistId', '');
+  var playlistTitle = loadState('playlistTitle', '');
+  var playlistThumb = loadState('playlistThumb', '');
+
+  function goBack() { window.location.href = 'search.html'; }
+
+  if (!playlistId) {
+    gid('playlist-items').innerHTML = '<div class="msg">No playlist selected.</div>';
+  } else {
+    loadPlaylist(playlistId);
+  }
+
+  function loadPlaylist(id) {
+    showLoading();
+
+    // Fetch playlist meta
+    apiCall(buildUrl('playlists', {
+      part: 'snippet,contentDetails',
+      id: id
+    }), function(err, plData) {
+      var pl = (plData && plData.items && plData.items[0]) ? plData.items[0] : null;
+      var title   = pl ? ((pl.snippet && pl.snippet.title) || playlistTitle) : playlistTitle;
+      var channel = pl ? ((pl.snippet && pl.snippet.channelTitle) || '') : '';
+      var count   = pl ? ((pl.contentDetails && pl.contentDetails.itemCount) || 0) : 0;
+      var thumb   = (pl && pl.snippet && pl.snippet.thumbnails && pl.snippet.thumbnails.medium)
+        ? pl.snippet.thumbnails.medium.url : playlistThumb;
+
+      gid('playlist-head').innerHTML =
+        (thumb ? '<img src="' + escHtml(thumb) + '" onerror="this.style.display=\'none\'" alt="">' : '') +
+        '<div>' +
+        '<h2>' + escHtml(title) + '</h2>' +
+        '<p>' + escHtml(channel) + (channel && count ? ' &bull; ' : '') + (count ? count + ' videos' : '') + '</p>' +
+        '</div>';
+
+      // Fetch items
+      apiCall(buildUrl('playlistItems', {
+        part: 'snippet,contentDetails',
+        playlistId: id,
+        maxResults: 50
+      }), function(err2, itemsData) {
+        hideLoading();
+        var container = gid('playlist-items');
+        container.innerHTML = '';
+
+        if (err2 || !itemsData || !itemsData.items || !itemsData.items.length) {
+          container.innerHTML = '<div class="msg">This playlist is empty or private.</div>';
+          return;
+        }
+
+        itemsData.items.forEach(function(item, index) {
+          var vid = (item.contentDetails && item.contentDetails.videoId) || '';
+          if (!vid && item.snippet && item.snippet.resourceId) {
+            vid = item.snippet.resourceId.videoId || '';
+          }
+          var t  = (item.snippet && item.snippet.title) || 'Untitled';
+          var ch = (item.snippet && item.snippet.channelTitle) || '';
+          var th = (item.snippet && item.snippet.thumbnails && item.snippet.thumbnails.medium)
+            ? item.snippet.thumbnails.medium.url : '';
+
+          var row = document.createElement('div');
+          row.className = 'pl-item';
+          row.setAttribute('tabindex', '0');
+          row.innerHTML =
+            '<span class="pl-num">' + (index + 1) + '</span>' +
+            (th ? '<img class="pl-thumb" src="' + escHtml(th) + '" onerror="this.style.display=\'none\'" alt="">' : '') +
+            '<div class="pl-info">' +
+            '<div class="pl-title">' + escHtml(t) + '</div>' +
+            '<div class="pl-ch">' + escHtml(ch) + '</div>' +
+            '</div>';
+
+          if (vid) {
+            row.onclick = function() {
+              saveState('videoId', vid);
+              saveState('videoTitle', t);
+              saveState('playerBackTo', 'playlist');
+              window.location.href = 'video.html';
+            };
+            row.addEventListener('keydown', function(e) {
+              if (e.keyCode === 13 || e.keyCode === 32) { e.preventDefault(); row.click(); }
+            });
+          }
+
+          container.appendChild(row);
+        });
+      });
+    });
+  }
+
+  function playAll() {
+    if (!playlistId) return;
+    var src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + playlistId +
+      '&autoplay=1&rel=0&controls=1';
+    saveState('videoId', '');
+    saveState('videoTitle', playlistTitle || 'Playlist');
+    saveState('playerBackTo', 'playlist');
+    // Store playlist src override
+    saveState('playlistSrc', src);
+    window.location.href = 'video.html';
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.keyCode === 8 || e.keyCode === 27) { e.preventDefault(); goBack(); }
+  });
+</script>
+</body>
+</html>
