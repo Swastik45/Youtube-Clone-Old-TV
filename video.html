@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watch — YouTV</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <link rel="stylesheet" href="styles.css">
 <style>
   body { overflow: hidden; }
@@ -86,32 +87,53 @@
     
     var videoElement = gid('player-video');
     
-    /* 
-      CRITICAL: You cannot inject a regular youtube.com/watch link into a video tag source.
-      You must pass the videoId to an extraction utility or proxy pipeline.
-      
-      Option A: Use a public Invidious API routing endpoint:
-      `https://invidious.snopyta.org/latest/videos/${vid}/stream`
-      
-      Option B: Route it via your own self-hosted backend scraper (yt-dlp wrapper API):
-      `https://your-backend-api.local/stream?id=${vid}`
+    /*
+      Using a reliable public HLS (HTTP Live Streaming) proxy target.
+      This provides an .m3u8 master playlist container instead of a raw video file link,
+      fixing the MIME type constraint.
     */
-    var rawStreamUrl = 'https://invidious.snopyta.org/latest/videos/' + vid + '/stream';
+    var streamUrl = 'https://vid.puffyan.us/api/v1/videos/' + vid + '/master.m3u8';
 
-    videoElement.src = rawStreamUrl;
-    videoElement.load();
+    // Fallback source for debugging or native mp4 parsing if needed
+    var fallbackUrl = 'https://vid.puffyan.us/latest/videos/' + vid + '/stream';
+
+    if (Hls.isSupported()) {
+      // Setup the JS stream engine decoder
+      var hls = new Hls({
+        maxMaxBufferLength: 10 // Keeps buffering ultra-lean
+      });
+      hls.loadSource(streamUrl);
+      hls.attachMedia(videoElement);
+      hls.on(Hls.Events.MANIFEST_PARSED, function() {
+        videoElement.play().catch(function(err) {
+            console.log("Autoplay blocked by browser policy, waiting for user click.");
+        });
+      });
+      
+      // Error recovery pipeline if HLS stream fails
+      hls.on(Hls.Events.ERROR, function (event, data) {
+        if (data.fatal) {
+          console.warn("HLS streaming error encountered. Trying fallback raw stream...");
+          videoElement.src = fallbackUrl;
+          videoElement.load();
+        }
+      });
+
+    } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native support (Safari / iOS devices accept m3u8 playlists instantly)
+      videoElement.src = streamUrl;
+      videoElement.addEventListener('loadedmetadata', function() {
+        videoElement.play();
+      });
+    } else {
+      // Basic fallback engine configuration
+      videoElement.src = fallbackUrl;
+      videoElement.load();
+    }
   }
 
-  // Playlist management logic adapted for direct source streaming streams
-  var playlistSrc = loadState('playlistSrc', '');
-
-  if (playlistSrc && !videoId) {
-    gid('video-title').textContent = loadState('videoTitle', 'Playlist');
-    var videoElement = gid('player-video');
-    videoElement.src = playlistSrc; // Expects raw stream media playlist URL (.m3u8)
-    videoElement.load();
-    saveState('playlistSrc', '');
-  } else if (videoId) {
+  // Bind the updated engine into your app's existing structural state
+  if (videoId) {
     loadVideo(videoId);
   } else {
     gid('player-wrap').innerHTML = '<div class="msg" style="padding-top:30vh;color:#555;">No video selected.</div>';
@@ -121,7 +143,8 @@
     var videoElement = gid('player-video');
     if (videoElement) {
       videoElement.pause();
-      videoElement.src = ""; // Unbind resources cleanly
+      videoElement.removeAttribute('src'); // Cleanly free memory overhead
+      videoElement.load();
     }
     var dest = backTo === 'playlist' ? 'playlists.html'
              : backTo === 'channel'  ? 'channel.html'
@@ -132,11 +155,11 @@
   function reloadVideo() {
     if (!videoId) return;
     loadVideo(videoId);
-    showToast('Reloading…');
+    showToast('Reloading stream pipeline…');
   }
 
   function tryFullscreen() {
-    var el = gid('player-video'); // Target the video element directly instead of iframe wrapper
+    var el = gid('player-video');
     if (el.requestFullscreen) el.requestFullscreen();
     else if (el.webkitRequestFullScreen) el.webkitRequestFullScreen();
     else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
