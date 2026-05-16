@@ -77,61 +77,23 @@
 
   gid('video-title').textContent = videoTitle || '';
 
-  // ── BLANK SRC: data: URI is more reliable than about:blank on old TV WebKit.
-  //    Some Samsung/LG firmwares keep the audio decoder alive with about:blank
-  //    but fully release it with a data: URI that has no media content.
-  var BLANK_SRC = 'data:text/html;charset=utf-8,%3Chtml%3E%3C%2Fhtml%3E';
-
-  function killIframe() {
-    // Step 1: mute — stops audible bleed immediately on all platforms
-    var iframe = gid('player-iframe');
-    try {
-      // postMessage mute (YouTube iFrame API listens even without enablejsapi on some builds)
-      iframe.contentWindow.postMessage('{"event":"command","func":"mute","args":[]}', '*');
-      iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":[]}', '*');
-    } catch (ignore) {}
-
-    // Step 2: swap src to blank data URI — releases media pipeline
-    iframe.src = BLANK_SRC;
-
-    // Step 3: on old WebViews the iframe element itself must be removed from DOM
-    //         and re-inserted to fully destroy the media decoder handle
-    var wrap = gid('player-wrap');
-    if (wrap && iframe.parentNode === wrap) {
-      wrap.removeChild(iframe);
-      // Re-append so the element exists if user hits reload before navigation completes
-      setTimeout(function() { wrap.appendChild(iframe); }, 50);
-    }
-  }
-
-  function navigateTo(dest) {
-    // Use replaceState so the TV hardware BACK button skips video.html entirely
-    // and goes straight back to the results/playlist/channel page.
-    try {
-      window.history.replaceState(null, '', dest);
-      window.location.replace(dest);   // replace() does NOT push to history stack
-    } catch (e) {
-      window.location.href = dest;     // fallback for very old WebViews
-    }
-  }
-
   function loadVideo(vid) {
     if (!vid) return;
     var src = 'https://www.youtube-nocookie.com/embed/' + vid +
       '?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&controls=1';
     var iframe = gid('player-iframe');
-    // Kill any previous session first, then wait one event-loop tick
-    iframe.src = BLANK_SRC;
-    setTimeout(function() { iframe.src = src; }, 250);
+    iframe.src = 'about:blank';
+    setTimeout(function() { iframe.src = src; }, 200);
   }
 
   var playlistSrc = loadState('playlistSrc', '');
 
   if (playlistSrc && !videoId) {
+    // Play-all mode from playlists page
     gid('video-title').textContent = loadState('videoTitle', 'Playlist');
     var iframe = gid('player-iframe');
-    iframe.src = BLANK_SRC;
-    setTimeout(function() { iframe.src = playlistSrc; saveState('playlistSrc', ''); }, 250);
+    iframe.src = 'about:blank';
+    setTimeout(function() { iframe.src = playlistSrc; saveState('playlistSrc', ''); }, 200);
   } else if (videoId) {
     loadVideo(videoId);
   } else {
@@ -139,14 +101,11 @@
   }
 
   function goBack() {
+    gid('player-iframe').src = 'about:blank';
     var dest = backTo === 'playlist' ? 'playlists.html'
              : backTo === 'channel'  ? 'channel.html'
              : 'search.html';
-
-    // Kill media first, then navigate after a tick so the iframe
-    // teardown completes before the page unloads
-    killIframe();
-    setTimeout(function() { navigateTo(dest); }, 150);
+    window.location.href = dest;
   }
 
   function reloadVideo() {
@@ -163,17 +122,8 @@
     else showToast('Fullscreen not supported on this device');
   }
 
-  // Hardware BACK key (keyCode 8 = Backspace, 27 = Escape, 10009 = Samsung Tizen BACK)
   document.addEventListener('keydown', function(e) {
-    if (e.keyCode === 8 || e.keyCode === 27 || e.keyCode === 10009) {
-      e.preventDefault();
-      goBack();
-    }
-  });
-
-  // Handle browser/TV native back navigation (popstate fires on hardware back on some TVs)
-  window.addEventListener('popstate', function() {
-    goBack();
+    if (e.keyCode === 8 || e.keyCode === 27) { e.preventDefault(); goBack(); }
   });
 </script>
 </body>
