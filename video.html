@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watch — YouTV</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <link rel="stylesheet" href="styles.css">
 <style>
   body { overflow: hidden; }
@@ -59,10 +58,7 @@
 
 <div id="player-wrap">
   <!-- Dropped the iframe. Using a raw HTML5 video player with clean native controls -->
-  <video id="player-video" 
-         controls 
-         autoplay 
-         playsinline>
+  <video id="player-video">
          Your browser does not support raw playback.
   </video>
 </div>
@@ -76,76 +72,51 @@
 
 <script src="shared.js"></script>
 <script>
+  // 1. Load the official YouTube player framework asynchronously 
+  var tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  var firstScriptTag = document.getElementsByTagName('script')[0];
+  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
   var videoId    = loadState('videoId', '');
   var videoTitle = loadState('videoTitle', '');
   var backTo     = loadState('playerBackTo', 'search');
+  var player;
 
   gid('video-title').textContent = videoTitle || '';
 
-  function loadVideo(vid) {
-    if (!vid) return;
-    
-    var videoElement = gid('player-video');
-    
-    /*
-      Using a reliable public HLS (HTTP Live Streaming) proxy target.
-      This provides an .m3u8 master playlist container instead of a raw video file link,
-      fixing the MIME type constraint.
-    */
-    var streamUrl = 'https://vid.puffyan.us/api/v1/videos/' + vid + '/master.m3u8';
-
-    // Fallback source for debugging or native mp4 parsing if needed
-    var fallbackUrl = 'https://vid.puffyan.us/latest/videos/' + vid + '/stream';
-
-    if (Hls.isSupported()) {
-      // Setup the JS stream engine decoder
-      var hls = new Hls({
-        maxMaxBufferLength: 10 // Keeps buffering ultra-lean
-      });
-      hls.loadSource(streamUrl);
-      hls.attachMedia(videoElement);
-      hls.on(Hls.Events.MANIFEST_PARSED, function() {
-        videoElement.play().catch(function(err) {
-            console.log("Autoplay blocked by browser policy, waiting for user click.");
-        });
-      });
-      
-      // Error recovery pipeline if HLS stream fails
-      hls.on(Hls.Events.ERROR, function (event, data) {
-        if (data.fatal) {
-          console.warn("HLS streaming error encountered. Trying fallback raw stream...");
-          videoElement.src = fallbackUrl;
-          videoElement.load();
-        }
-      });
-
-    } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native support (Safari / iOS devices accept m3u8 playlists instantly)
-      videoElement.src = streamUrl;
-      videoElement.addEventListener('loadedmetadata', function() {
-        videoElement.play();
-      });
-    } else {
-      // Basic fallback engine configuration
-      videoElement.src = fallbackUrl;
-      videoElement.load();
+  // 2. This function triggers automatically when the streaming framework is ready
+  function onYouTubeIframeAPIReady() {
+    if (!videoId) {
+      gid('player-wrap').innerHTML = '<div class="msg" style="padding-top:30vh;color:#555;">No video selected.</div>';
+      return;
     }
+    
+    player = new YT.Player('player-video', {
+      height: '100%',
+      width: '100%',
+      videoId: videoId,
+      playerVars: {
+        'autoplay': 1,
+        'controls': 0,          // Strips out all YouTube play bars/timelines completely
+        'disablekb': 1,         // Disables default YouTube shortcut overrides
+        'modestbranding': 1,    // Completely removes the large YouTube watermark profile
+        'rel': 0,               // Blocks automated recommendations when video ends
+        'iv_load_policy': 3,    // Strips annotations out of the stream view context
+        'playsinline': 1
+      },
+      events: {
+        'onReady': onPlayerReady
+      }
+    });
   }
 
-  // Bind the updated engine into your app's existing structural state
-  if (videoId) {
-    loadVideo(videoId);
-  } else {
-    gid('player-wrap').innerHTML = '<div class="msg" style="padding-top:30vh;color:#555;">No video selected.</div>';
+  function onPlayerReady(event) {
+    event.target.playVideo();
   }
 
   function goBack() {
-    var videoElement = gid('player-video');
-    if (videoElement) {
-      videoElement.pause();
-      videoElement.removeAttribute('src'); // Cleanly free memory overhead
-      videoElement.load();
-    }
+    if (player && player.destroy) player.destroy(); // Tear down streaming instances cleanly
     var dest = backTo === 'playlist' ? 'playlists.html'
              : backTo === 'channel'  ? 'channel.html'
              : 'search.html';
@@ -153,13 +124,14 @@
   }
 
   function reloadVideo() {
-    if (!videoId) return;
-    loadVideo(videoId);
-    showToast('Reloading stream pipeline…');
+    if (!player || !videoId) return;
+    player.loadVideoById(videoId);
+    showToast('Reloading core stream canvas…');
   }
 
   function tryFullscreen() {
-    var el = gid('player-video');
+    // Target the iframe wrapper element injected by the API engine
+    var el = document.getElementById('player-video');
     if (el.requestFullscreen) el.requestFullscreen();
     else if (el.webkitRequestFullScreen) el.webkitRequestFullScreen();
     else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
